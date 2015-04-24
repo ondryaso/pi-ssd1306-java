@@ -1,0 +1,4 @@
+Manifest-Version: 1.0
+Class-Path: /opt/pi4j/lib
+Main-Class: eu.ondryaso.ssd1306.examples.Pixels
+

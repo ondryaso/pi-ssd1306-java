@@ -1,0 +1,32 @@
+*.class
+.classpath
+.project
+bin/
+.settings/
+.idea/
+classes/
+*.iml
+native/
+target/
+screenshots/
+saves/
+saved.png
+config.cfg
+.gradle/
+build.gradle
+build/
+libs/
+src/META-INF/
+.vim.custom
+*.swp
+
+# Package Files #
+*.jar
+*.war
+*.ear
+
+*.ccf
+
+# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
+hs_err_pid*
+/target/

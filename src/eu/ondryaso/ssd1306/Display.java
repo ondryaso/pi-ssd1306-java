@@ -15,19 +15,16 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 
 public class Display {
+    protected int vccState;
+    protected BufferedImage img;
+    protected Graphics2D graphics;
     private int width, height, pages;
-    private boolean usingI2C;
-
+    private boolean usingI2C, hasRst;
     private GpioPinDigitalOutput rstPin, dcPin;
     private I2CDevice i2c;
     private SpiDevice spi;
-
     private int fd;
-    protected int vccState;
-
     private byte[] buffer;
-    protected BufferedImage img;
-    protected Graphics2D graphics;
 
     public Display(int width, int height, GpioController gpio, SpiDevice spi, Pin rstPin, Pin dcPin) {
         this(width, height, false, gpio, rstPin);
@@ -36,84 +33,93 @@ public class Display {
         this.spi = spi;
     }
 
-    public Display(int width, int height, GpioController gpio, I2CBus i2c, int address, Pin rstPin) throws IOException {
+    public Display(int width, int height, GpioController gpio, I2CBus i2c, int address, Pin rstPin) throws ReflectiveOperationException, IOException {
         this(width, height, true, gpio, rstPin);
 
         this.i2c = i2c.getDevice(address);
 
-        try {
-            Field f = this.i2c.getClass().getDeclaredField("fd");
-            f.setAccessible(true);
-            this.fd = f.getInt(this.i2c);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            e.printStackTrace();
-        }
+        Field f = this.i2c.getClass().getDeclaredField("fd");
+        f.setAccessible(true);
+        this.fd = f.getInt(this.i2c);
+    }
+
+    public Display(int width, int height, GpioController gpio, SpiDevice spi, Pin dcPin) {
+        this(width, height, gpio, spi, null, dcPin);
+    }
+
+    public Display(int width, int height, GpioController gpio, I2CBus i2c, int address) throws ReflectiveOperationException, IOException {
+        this(width, height, gpio, i2c, address, null);
     }
 
     private Display(int width, int height, boolean i2c, GpioController gpio, Pin rstPin) {
-        this.width = (int) width;
-        this.height = (int) height;
-        this.pages = (int) (height / 8);
+        this.width = width;
+        this.height = height;
+        this.pages = (height / 8);
         this.buffer = new byte[width * this.pages];
         this.usingI2C = i2c;
 
-        this.rstPin = gpio.provisionDigitalOutputPin(rstPin);
+        if (rstPin != null) {
+            this.rstPin = gpio.provisionDigitalOutputPin(rstPin);
+            this.hasRst = true;
+        } else {
+            this.hasRst = false;
+        }
 
         this.img = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_BINARY);
         this.graphics = this.img.createGraphics();
     }
 
     private void initDisplay() {
-        if(this.width == 128 && this.height == 64) {
+        if (this.width == 128 && this.height == 64) {
             this.init(0x3F, 0x12, 0x80);
-        } else if(this.width == 128 && this.height == 32) {
+        } else if (this.width == 128 && this.height == 32) {
             this.init(0x1F, 0x02, 0x80);
-        } else if(this.width == 96 && this.height == 16) {
+        } else if (this.width == 96 && this.height == 16) {
             this.init(0x0F, 0x02, 0x60);
         }
 
     }
 
     private void init(int multiplex, int compins, int ratio) {
-            this.command(Constants.SSD1306_DISPLAYOFF);
-            this.command(Constants.SSD1306_SETDISPLAYCLOCKDIV);
-            this.command((short) ratio);
-            this.command(Constants.SSD1306_SETMULTIPLEX);
-            this.command((short) multiplex);
-            this.command(Constants.SSD1306_SETDISPLAYOFFSET);
-            this.command((short) 0x0);
-            this.command((short) (Constants.SSD1306_SETSTARTLINE | 0x0));
-            this.command(Constants.SSD1306_CHARGEPUMP);
+        this.command(Constants.SSD1306_DISPLAYOFF);
+        this.command(Constants.SSD1306_SETDISPLAYCLOCKDIV);
+        this.command((short) ratio);
+        this.command(Constants.SSD1306_SETMULTIPLEX);
+        this.command((short) multiplex);
+        this.command(Constants.SSD1306_SETDISPLAYOFFSET);
+        this.command((short) 0x0);
+        this.command(Constants.SSD1306_SETSTARTLINE);
+        this.command(Constants.SSD1306_CHARGEPUMP);
 
-            if (this.vccState == Constants.SSD1306_EXTERNALVCC)
-                this.command((short) 0x10);
-            else
-                this.command((short) 0x14);
+        if (this.vccState == Constants.SSD1306_EXTERNALVCC)
+            this.command((short) 0x10);
+        else
+            this.command((short) 0x14);
 
-            this.command(Constants.SSD1306_MEMORYMODE);
-            this.command((short) 0x00);
-            this.command((short)(Constants.SSD1306_SEGREMAP | 0x1));
-            this.command(Constants.SSD1306_COMSCANDEC);
-            this.command(Constants.SSD1306_SETCOMPINS);
-            this.command((short) compins);
-            this.command(Constants.SSD1306_SETCONTRAST);
+        this.command(Constants.SSD1306_MEMORYMODE);
+        this.command((short) 0x00);
+        this.command((short) (Constants.SSD1306_SEGREMAP | 0x1));
+        this.command(Constants.SSD1306_COMSCANDEC);
+        this.command(Constants.SSD1306_SETCOMPINS);
+        this.command((short) compins);
+        this.command(Constants.SSD1306_SETCONTRAST);
 
-            if (this.vccState == Constants.SSD1306_EXTERNALVCC)
-                this.command((short) 0x9F);
-            else
-                this.command((short) 0xCF);
+        if (this.vccState == Constants.SSD1306_EXTERNALVCC)
+            this.command((short) 0x9F);
+        else
+            this.command((short) 0xCF);
 
-            this.command(Constants.SSD1306_SETPRECHARGE);
+        this.command(Constants.SSD1306_SETPRECHARGE);
 
-            if (this.vccState == Constants.SSD1306_EXTERNALVCC)
-                this.command((short) 0x22);
-            else
-                this.command((short) 0xF1);
+        if (this.vccState == Constants.SSD1306_EXTERNALVCC)
+            this.command((short) 0x22);
+        else
+            this.command((short) 0xF1);
 
-            this.command(Constants.SSD1306_SETVCOMDETECT);
-            this.command((short) 0x40);
-            this.command(Constants.SSD1306_DISPLAYALLON_RESUME);
-            this.command(Constants.SSD1306_NORMALDISPLAY);
+        this.command(Constants.SSD1306_SETVCOMDETECT);
+        this.command((short) 0x40);
+        this.command(Constants.SSD1306_DISPLAYALLON_RESUME);
+        this.command(Constants.SSD1306_NORMALDISPLAY);
     }
 
     public void command(int command) {
@@ -144,7 +150,7 @@ public class Display {
 
     public void data(byte[] data) {
         if (this.usingI2C) {
-            for(int i = 0; i < data.length; i += 16) {
+            for (int i = 0; i < data.length; i += 16) {
                 this.i2cWrite(0x40, data[i]);
             }
         } else {
@@ -171,14 +177,16 @@ public class Display {
     }
 
     public void reset() {
-        try {
-            this.rstPin.setState(true);
-            Thread.sleep(1);
-            this.rstPin.setState(false);
-            Thread.sleep(10);
-            this.rstPin.setState(true);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+        if (this.hasRst) {
+            try {
+                this.rstPin.setState(true);
+                Thread.sleep(1);
+                this.rstPin.setState(false);
+                Thread.sleep(10);
+                this.rstPin.setState(true);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         }
     }
 
@@ -203,10 +211,10 @@ public class Display {
     }
 
     public void dim(boolean dim) {
-        if(dim) {
+        if (dim) {
             this.setContrast((byte) 0);
         } else {
-            if(this.vccState == Constants.SSD1306_EXTERNALVCC) {
+            if (this.vccState == Constants.SSD1306_EXTERNALVCC) {
                 this.setContrast((byte) 0x9F);
             } else {
                 this.setContrast((byte) 0xCF);
@@ -215,7 +223,7 @@ public class Display {
     }
 
     public void invertDisplay(boolean invert) {
-        if(invert) {
+        if (invert) {
             this.command(Constants.SSD1306_INVERTDISPLAY);
         } else {
             this.command(Constants.SSD1306_NORMALDISPLAY);

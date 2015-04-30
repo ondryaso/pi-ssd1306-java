@@ -273,7 +273,7 @@ public class Display {
     /**
      * Sends the buffer to the display
      */
-    public void display() {
+    public synchronized void display() {
         this.command(Constants.SSD1306_COLUMNADDR);
         this.command(0);
         this.command(this.width - 1);
@@ -405,7 +405,7 @@ public class Display {
      * Copies AWT image contents to buffer. Calls display()
      * @see Display#display()
      */
-    public void displayImage() {
+    public synchronized void displayImage() {
         Raster r = this.img.getRaster();
 
         for (int y = 0; y < this.height; y++) {
